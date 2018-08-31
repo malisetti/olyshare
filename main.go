@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -22,6 +23,13 @@ const getImg string = "http://192.168.0.10%s"
 
 // /DCIM/100OLYMP,P3300029.JPG,2964502,0,19582,35122
 func main() {
+	appCtx, cancel := context.WithCancel(context.Background())
+	interruptions := make(chan os.Signal, 1)
+	go func() {
+		<-interruptions
+		cancel()
+	}()
+
 	dirSep := string(os.PathSeparator)
 	fileUrls := make(chan string)
 
@@ -39,15 +47,24 @@ func main() {
 
 		defer resp.Body.Close()
 		scanner := bufio.NewScanner(resp.Body)
-		for scanner.Scan() {
-			txt := scanner.Text()
-			if strings.HasPrefix(txt, "/") {
-				parts := strings.Split(txt, ",")
-				fileUrls <- strings.Join(parts[:2], "/")
+		for {
+			select {
+			case <-appCtx.Done():
+				return
+			default:
+				if !scanner.Scan() {
+					return
+				}
+				txt := scanner.Text()
+				if strings.HasPrefix(txt, "/") {
+					parts := strings.Split(txt, ",")
+					fileUrls <- strings.Join(parts[:2], "/")
+				}
+
+				if err := scanner.Err(); err != nil {
+					fmt.Fprintf(os.Stderr, "reading response failed with %v\n", err)
+				}
 			}
-		}
-		if err := scanner.Err(); err != nil {
-			fmt.Fprintf(os.Stderr, "reading response failed with %v\n", err)
 		}
 	}()
 
@@ -64,7 +81,7 @@ func main() {
 				for x := range fileUrls {
 					parts := strings.Split(x, "/")
 					fn := parts[len(parts)-1]
-					if _, err := os.Stat("output" + dirSep + x); err == nil {
+					if _, err := os.Stat("output" + dirSep + fn); err == nil {
 						continue
 					}
 					imgURL := fmt.Sprintf(getImg, x)
