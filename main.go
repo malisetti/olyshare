@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
 	"sync"
 
@@ -25,6 +26,7 @@ const getImg string = "http://192.168.0.10%s"
 func main() {
 	appCtx, cancel := context.WithCancel(context.Background())
 	interruptions := make(chan os.Signal, 1)
+	signal.Notify(interruptions, os.Interrupt, os.Kill)
 	go func() {
 		<-interruptions
 		cancel()
