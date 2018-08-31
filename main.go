@@ -68,7 +68,7 @@ func main() {
 						continue
 					}
 					imgURL := fmt.Sprintf(getImg, x)
-					fmt.Println(imgURL)
+					fmt.Printf("fetching image from %s\n", imgURL)
 					resp, err := client.Get(imgURL)
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "GET %s failed with %v\n", imgURL, err)
@@ -82,6 +82,7 @@ func main() {
 					}
 					_, err = io.Copy(f, resp.Body)
 					if err == nil {
+						fmt.Printf("saving file %s in output\n", fn)
 						f.Sync()
 						f.Close()
 					} else {
