@@ -116,4 +116,5 @@ func main() {
 	}()
 
 	wgo.Wait()
+	close(interruptions)
 }
