@@ -77,11 +77,15 @@ func main() {
 					f, err := os.Create("output/" + fn)
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "file create %s failed with %v\n", fn, err)
-					} else {
-						io.Copy(f, resp.Body)
+						continue
 					}
-					f.Sync()
-					f.Close()
+					_, err = io.Copy(f, resp.Body)
+					if err == nil {
+						f.Sync()
+						f.Close()
+					} else {
+						fmt.Fprintf(os.Stderr, "copy failed with %v", err)
+					}
 				}
 			}()
 		}
