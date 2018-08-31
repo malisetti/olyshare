@@ -22,6 +22,7 @@ const getImg string = "http://192.168.0.10%s"
 
 // /DCIM/100OLYMP,P3300029.JPG,2964502,0,19582,35122
 func main() {
+	dirSep := string(os.PathSeparator)
 	fileUrls := make(chan string)
 
 	var wgo sync.WaitGroup
@@ -63,7 +64,7 @@ func main() {
 				for x := range fileUrls {
 					parts := strings.Split(x, "/")
 					fn := parts[len(parts)-1]
-					if _, err := os.Stat("output/" + x); err == nil {
+					if _, err := os.Stat("output" + dirSep + x); err == nil {
 						continue
 					}
 					imgURL := fmt.Sprintf(getImg, x)
@@ -74,7 +75,7 @@ func main() {
 						continue
 					}
 					defer resp.Body.Close()
-					f, err := os.Create("output/" + fn)
+					f, err := os.Create("output" + dirSep + fn)
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "file create %s failed with %v\n", fn, err)
 						continue
@@ -84,7 +85,7 @@ func main() {
 						f.Sync()
 						f.Close()
 					} else {
-						os.Remove("output/" + fn)
+						os.Remove("output" + dirSep + fn)
 						fmt.Fprintf(os.Stderr, "copy failed with %v", err)
 					}
 				}
