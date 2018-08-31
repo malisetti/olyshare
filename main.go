@@ -84,6 +84,7 @@ func main() {
 						f.Sync()
 						f.Close()
 					} else {
+						os.Remove("output/" + fn)
 						fmt.Fprintf(os.Stderr, "copy failed with %v", err)
 					}
 				}
