@@ -62,10 +62,15 @@ func main() {
 	var wgo sync.WaitGroup
 	wgo.Add(2)
 
+	client := http.Client{
+		Transport: httpcache.NewTransport(diskcache.New(*cacheDir)),
+	}
+
 	go func() {
 		defer wgo.Done()
 		defer close(fileUrls)
-		resp, err := http.Get(listImgs)
+		r0, _ := http.NewRequestWithContext(appCtx, http.MethodGet, listImgs, nil)
+		resp, err := client.Do(r0)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "could not list imgs, used GET %s and failed with %v\n", listImgs, err)
 			return
@@ -99,9 +104,6 @@ func main() {
 	}()
 
 	go func() {
-		client := http.Client{
-			Transport: httpcache.NewTransport(diskcache.New(*cacheDir)),
-		}
 		defer wgo.Done()
 		skip := false
 		for x := range fileUrls {
