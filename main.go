@@ -106,81 +106,83 @@ func main() {
 	go func() {
 		defer wgo.Done()
 		skip := false
-		for x := range fileUrls {
-			if skip {
-				continue
-			}
-			parts := strings.Split(x, "/")
-			fn := parts[len(parts)-1]
-			if _, err := os.Stat(*outDir + dirSep + fn); err == nil {
-				continue
-			}
-			imgURL := fmt.Sprintf(getImg, x)
-			fmt.Printf("fetching image from %s\n", imgURL)
-			r1, err := http.NewRequestWithContext(appCtx, http.MethodHead, imgURL, nil)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "HEAD %s failed with %v\n", imgURL, err)
-				continue
-			}
-			resp0, err := client.Do(r1)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "HEAD %s failed with %v\n", imgURL, err)
-				continue
-			}
-			for name, values := range resp0.Header {
-				for _, value := range values {
-					fmt.Println(name, value)
+		for i := 0; i < 2; i++ {
+			for x := range fileUrls {
+				if skip {
+					continue
 				}
-			}
-			ct := resp0.Header.Get("Content-Type")
-			if *skipMov && strings.EqualFold(ct, "video/quicktime") {
-				continue
-			}
-			if *skipRaw && !strings.EqualFold(ct, "image/jpeg") {
-				continue
-			}
+				parts := strings.Split(x, "/")
+				fn := parts[len(parts)-1]
+				if _, err := os.Stat(*outDir + dirSep + fn); err == nil {
+					continue
+				}
+				imgURL := fmt.Sprintf(getImg, x)
+				fmt.Printf("fetching image from %s\n", imgURL)
+				r1, err := http.NewRequestWithContext(appCtx, http.MethodHead, imgURL, nil)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "HEAD %s failed with %v\n", imgURL, err)
+					continue
+				}
+				resp0, err := client.Do(r1)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "HEAD %s failed with %v\n", imgURL, err)
+					continue
+				}
+				for name, values := range resp0.Header {
+					for _, value := range values {
+						fmt.Println(name, value)
+					}
+				}
+				ct := resp0.Header.Get("Content-Type")
+				if *skipMov && strings.EqualFold(ct, "video/quicktime") {
+					continue
+				}
+				if *skipRaw && !strings.EqualFold(ct, "image/jpeg") {
+					continue
+				}
 
-			r2, err := http.NewRequestWithContext(appCtx, http.MethodGet, imgURL, nil)
-			resp, err := client.Do(r2)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "GET %s failed with %v\n", imgURL, err)
-				continue
-			}
-			defer resp.Body.Close()
-			body, err := ioutil.ReadAll(resp.Body)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "failed to read response body, failed with %v\n", err)
-				continue
-			}
+				r2, err := http.NewRequestWithContext(appCtx, http.MethodGet, imgURL, nil)
+				resp, err := client.Do(r2)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "GET %s failed with %v\n", imgURL, err)
+					continue
+				}
+				defer resp.Body.Close()
+				body, err := ioutil.ReadAll(resp.Body)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "failed to read response body, failed with %v\n", err)
+					continue
+				}
 
-			xif, err := exif.Decode(bytes.NewReader(body))
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "failed to read exif data, failed with %v\n", err)
-				continue
-			}
+				xif, err := exif.Decode(bytes.NewReader(body))
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "failed to read exif data, failed with %v\n", err)
+					continue
+				}
 
-			tm, _ := xif.DateTime()
-			fmt.Println("Taken: ", tm)
-			cx := carbon.Now().SubDays(*copyDays)
-			if carbon.NewCarbon(tm).Unix() < cx.Unix() {
-				skip = true
-				continue
-			}
+				tm, _ := xif.DateTime()
+				fmt.Println("Taken: ", tm)
+				cx := carbon.Now().SubDays(*copyDays)
+				if carbon.NewCarbon(tm).Unix() < cx.Unix() {
+					skip = true
+					continue
+				}
 
-			p := *outDir + dirSep + fn
-			f, err := os.Create(p)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "file create %s failed with %v\n", fn, err)
-				continue
-			}
-			_, err = io.Copy(f, bytes.NewReader(body))
-			if err == nil {
-				fmt.Printf("saving file to %s\n", p)
-				f.Sync()
-				f.Close()
-			} else {
-				os.Remove(*outDir + dirSep + fn)
-				fmt.Fprintf(os.Stderr, "copy failed with %v\n", err)
+				p := *outDir + dirSep + fn
+				f, err := os.Create(p)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "file create %s failed with %v\n", fn, err)
+					continue
+				}
+				_, err = io.Copy(f, bytes.NewReader(body))
+				if err == nil {
+					fmt.Printf("saving file to %s\n", p)
+					f.Sync()
+					f.Close()
+				} else {
+					os.Remove(*outDir + dirSep + fn)
+					fmt.Fprintf(os.Stderr, "copy failed with %v\n", err)
+				}
 			}
 		}
 	}()
