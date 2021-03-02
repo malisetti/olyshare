@@ -104,8 +104,10 @@ func main() {
 	}()
 
 	go func() {
+		var doOnce sync.Once
 		defer wgo.Done()
 		skip := false
+
 		for i := 0; i < 2; i++ {
 			for x := range fileUrls {
 				if skip {
@@ -164,7 +166,9 @@ func main() {
 				fmt.Println("Taken: ", tm)
 				cx := carbon.Now().SubDays(*copyDays)
 				if carbon.NewCarbon(tm).Unix() < cx.Unix() {
-					skip = true
+					doOnce.Do(func() {
+						skip = true
+					})
 					continue
 				}
 
