@@ -59,15 +59,11 @@ func main() {
 	dirSep := string(os.PathSeparator)
 	fileUrls := make(chan string)
 
-	var wgo sync.WaitGroup
-	wgo.Add(2)
-
 	client := http.Client{
 		Transport: httpcache.NewTransport(diskcache.New(*cacheDir)),
 	}
 
 	go func() {
-		defer wgo.Done()
 		defer close(fileUrls)
 		r0, _ := http.NewRequestWithContext(appCtx, http.MethodGet, listImgs, nil)
 		resp, err := client.Do(r0)
@@ -103,17 +99,20 @@ func main() {
 		}
 	}()
 
-	go func() {
-		var doOnce sync.Once
-		defer wgo.Done()
-		skip := false
-		var wg sync.WaitGroup
+	var doOnce sync.Once
+	skip := false
+	var wg sync.WaitGroup
 
-		for i := 0; i < 2; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				for x := range fileUrls {
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case <-appCtx.Done():
+					return
+				default:
+					x := <-fileUrls
 					if skip {
 						continue
 					}
@@ -192,11 +191,9 @@ func main() {
 						fmt.Fprintf(os.Stderr, "copy failed with %v\n", err)
 					}
 				}
-			}()
-		}
-		wg.Wait()
-	}()
-
-	wgo.Wait()
+			}
+		}()
+	}
+	wg.Wait()
 	close(interruptions)
 }
