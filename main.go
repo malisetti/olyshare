@@ -21,15 +21,10 @@ import (
 	"github.com/uniplaces/carbon"
 )
 
-const listImgs string = "http://192.168.0.10/get_imglist.cgi?DIR=/DCIM/100OLYMP"
-
-// "http://192.168.0.10/get_imglist.cgi?DIR=%s"
-const getImg string = "http://192.168.0.10%s"
-
 // /DCIM/100OLYMP/P8301116.JPG
-
 // /DCIM/100OLYMP,P3300029.JPG,2964502,0,19582,35122
 func main() {
+	camIP := flag.String("cam-ip", "http://192.168.0.10", "camera ip")
 	cacheDir := flag.String("cache-dir", ".cache", "cache directory")
 	outDir := flag.String("out-dir", "output", "output directory")
 	skipMov := flag.Bool("skip-movie", false, "skips mov files")
@@ -40,11 +35,14 @@ func main() {
 
 	for _, v := range []string{*cacheDir, *outDir} {
 		if _, err := os.Stat(v); os.IsNotExist(err) {
-			// path/to/whatever does not exist
-			fmt.Fprintf(os.Stderr, "given output dir %s does not exist or output dir is not present at ., failed with %v\n", *outDir, err)
+			fmt.Fprintf(os.Stderr, "given dir %s does not exist, failed with %v\n", *outDir, err)
 			return
 		}
 	}
+
+	// "http://192.168.0.10/get_imglist.cgi?DIR=%s"
+	listImgs := *camIP + "/get_imglist.cgi?DIR=/DCIM/100OLYMP"
+	getImg := *camIP + "%s"
 
 	exif.RegisterParsers(mknote.All...)
 
