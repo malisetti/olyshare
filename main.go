@@ -67,6 +67,7 @@ func main() {
 		resp, err := client.Do(r0)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "could not list imgs, used GET %s and failed with %v\n", listImgs, err)
+			cancel()
 			return
 		}
 
@@ -110,9 +111,9 @@ func main() {
 				case <-appCtx.Done():
 					return
 				default:
-					x := <-fileUrls
-					if skip {
-						continue
+					x, ok := <-fileUrls
+					if !ok || skip {
+						return
 					}
 					parts := strings.Split(x, "/")
 					fn := parts[len(parts)-1]
