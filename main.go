@@ -21,18 +21,29 @@ import (
 	"github.com/uniplaces/carbon"
 )
 
+var (
+	camIP    *string
+	cacheDir *string
+	outDir   *string
+	skipMov  *bool
+	skipRaw  *bool
+	copyDays *int
+)
+
+func init() {
+	camIP = flag.String("cam-ip", "http://192.168.0.10", "camera ip")
+	cacheDir = flag.String("cache-dir", ".cache", "cache directory")
+	outDir = flag.String("out-dir", "output", "output directory")
+	skipMov = flag.Bool("skip-movie", false, "skips mov files")
+	skipRaw = flag.Bool("skip-raw", false, "skips raw files")
+	copyDays = flag.Int("copy-days", 1, "specifies number of days to copy images from")
+
+	flag.Parse()
+}
+
 // /DCIM/100OLYMP/P8301116.JPG
 // /DCIM/100OLYMP,P3300029.JPG,2964502,0,19582,35122
 func main() {
-	camIP := flag.String("cam-ip", "http://192.168.0.10", "camera ip")
-	cacheDir := flag.String("cache-dir", ".cache", "cache directory")
-	outDir := flag.String("out-dir", "output", "output directory")
-	skipMov := flag.Bool("skip-movie", false, "skips mov files")
-	skipRaw := flag.Bool("skip-raw", false, "skips raw files")
-	copyDays := flag.Int("copy-days", 1, "specifies number of days to copy images from")
-
-	flag.Parse()
-
 	for _, v := range []string{*cacheDir, *outDir} {
 		if _, err := os.Stat(v); os.IsNotExist(err) {
 			fmt.Fprintf(os.Stderr, "given dir %s does not exist, failed with %v\n", *outDir, err)
@@ -48,7 +59,7 @@ func main() {
 
 	appCtx, cancel := context.WithCancel(context.Background())
 	interruptions := make(chan os.Signal, 1)
-	signal.Notify(interruptions, os.Interrupt, os.Kill)
+	signal.Notify(interruptions, os.Interrupt)
 	go func() {
 		<-interruptions
 		cancel()
@@ -98,9 +109,11 @@ func main() {
 		}
 	}()
 
-	var doOnce sync.Once
-	skip := false
-	var wg sync.WaitGroup
+	var (
+		skip   bool
+		wg     sync.WaitGroup
+		doOnce sync.Once
+	)
 
 	for i := 0; i < 2; i++ {
 		wg.Add(1)
@@ -132,11 +145,6 @@ func main() {
 						fmt.Fprintf(os.Stderr, "HEAD %s failed with %v\n", imgURL, err)
 						continue
 					}
-					for name, values := range resp0.Header {
-						for _, value := range values {
-							fmt.Println(name, value)
-						}
-					}
 					ct := resp0.Header.Get("Content-Type")
 					if *skipMov && strings.EqualFold(ct, "video/quicktime") {
 						continue
@@ -146,6 +154,10 @@ func main() {
 					}
 
 					r2, err := http.NewRequestWithContext(appCtx, http.MethodGet, imgURL, nil)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "GET %s failed with %v\n", imgURL, err)
+						continue
+					}
 					resp, err := client.Do(r2)
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "GET %s failed with %v\n", imgURL, err)
@@ -180,13 +192,17 @@ func main() {
 						fmt.Fprintf(os.Stderr, "file create %s failed with %v\n", fn, err)
 						continue
 					}
+					defer f.Close()
 					_, err = io.Copy(f, bytes.NewReader(body))
 					if err == nil {
 						fmt.Printf("saving file to %s\n", p)
-						f.Sync()
-						f.Close()
+						err := f.Sync()
+						if err != nil {
+							fmt.Fprintf(os.Stderr, "file create %s failed with %v\n", fn, err)
+							continue
+						}
 					} else {
-						os.Remove(*outDir + dirSep + fn)
+						os.Remove(p)
 						fmt.Fprintf(os.Stderr, "copy failed with %v\n", err)
 					}
 				}
