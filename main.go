@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"syscall"
 
 	"github.com/gregjones/httpcache"
 	"github.com/gregjones/httpcache/diskcache"
@@ -47,7 +48,7 @@ func main() {
 
 	appCtx, cancel := context.WithCancel(context.Background())
 	interruptions := make(chan os.Signal, 1)
-	signal.Notify(interruptions, os.Interrupt)
+	signal.Notify(interruptions, syscall.SIGINT, syscall.SIGHUP)
 	go func() {
 		<-interruptions
 		cancel()
