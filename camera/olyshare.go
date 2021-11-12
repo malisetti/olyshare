@@ -152,7 +152,6 @@ func (i *Importer) Import(ctx context.Context, cam *Camera, cli *http.Client) (e
 						img.Taken = taken
 						cx := carbon.Now().SubDays(i.CopyDays)
 						if carbon.NewCarbon(taken).Unix() < cx.Unix() {
-							cancel()
 							return fmt.Errorf("all images are older so stopping here")
 						}
 
@@ -177,7 +176,6 @@ func (i *Importer) Import(ctx context.Context, cam *Camera, cli *http.Client) (e
 					if err != nil {
 						errchan <- err
 						cancel()
-						return
 					}
 				case <-ctxx.Done():
 					return
@@ -186,25 +184,28 @@ func (i *Importer) Import(ctx context.Context, cam *Camera, cli *http.Client) (e
 		}(wg)
 	}
 
-	for _, img := range images {
-		fn := strings.Split(img.ID, "/")
-		if _, err := os.Stat(i.WriteDir + DirSep + fn[len(fn)-1]); err == nil {
-			continue
-		}
+	go func() {
+		for _, img := range images {
+			fn := strings.Split(img.ID, "/")
+			if _, err := os.Stat(i.WriteDir + DirSep + fn[len(fn)-1]); err == nil {
+				continue
+			}
 
-		var ct string
-		ct, err = img.ContentType(ctxx, cam.IP, cli)
-		if err != nil {
-			return
-		}
-		if _, ok := i.SkipContentTypes[ct]; ok {
-			continue
-		}
+			var ct string
+			ct, err = img.ContentType(ctxx, cam.IP, cli)
+			if err != nil {
+				return
+			}
+			if _, ok := i.SkipContentTypes[ct]; ok {
+				continue
+			}
 
-		imgchan <- img
-	}
+			imgchan <- img
+		}
+	}()
 
+	err = <-errchan
 	close(imgchan)
 
-	return <-errchan
+	return err
 }
