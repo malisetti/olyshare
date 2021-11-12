@@ -62,18 +62,20 @@ func main() {
 		ImagesURL: *camIP + "/get_imglist.cgi?DIR=/DCIM/100OLYMP", // "http://192.168.0.10/get_imglist.cgi?DIR=%s"
 	}
 
-	var skipContentTypes []string
+	skipCtMap := make(map[string]struct{})
 	if *skipMov {
-		skipContentTypes = append(skipContentTypes, "video/quicktime", "video/x-msvideo")
+		skipCtMap["video/quicktime"] = struct{}{}
+		skipCtMap["video/x-msvideo"] = struct{}{}
 	}
 	if *skipRaw {
-		skipContentTypes = append(skipContentTypes, "image/x-olympus-orf")
+		skipCtMap["image/x-olympus-orf"] = struct{}{}
 	}
+
 	if *importRoutines <= 0 || *importRoutines >= 5 {
 		*importRoutines = 2
 	}
 	imp := &camera.Importer{
-		SkipContentTypes: &skipContentTypes,
+		SkipContentTypes: skipCtMap,
 		CopyDays:         *copyDays,
 		WriteDir:         *outDir,
 		ImportRoutines:   *importRoutines,

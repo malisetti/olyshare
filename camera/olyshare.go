@@ -109,7 +109,7 @@ func (i *Image) Grab(ctx context.Context, camIP string, cli *http.Client) (body 
 }
 
 type Importer struct {
-	SkipContentTypes *[]string
+	SkipContentTypes map[string]struct{}
 	CopyDays         int
 	WriteDir         string
 	ImportRoutines   int
@@ -122,11 +122,6 @@ func (i *Importer) Import(ctx context.Context, cam *Camera, cli *http.Client) (e
 	images, err := cam.ListImages(ctxx, cli)
 	if err != nil {
 		return
-	}
-
-	skipCtMap := make(map[string]string)
-	for _, v := range *i.SkipContentTypes {
-		skipCtMap[v] = v
 	}
 
 	imgchan := make(chan *Image)
@@ -202,7 +197,7 @@ func (i *Importer) Import(ctx context.Context, cam *Camera, cli *http.Client) (e
 		if err != nil {
 			return
 		}
-		if _, ok := skipCtMap[ct]; ok {
+		if _, ok := i.SkipContentTypes[ct]; ok {
 			continue
 		}
 
