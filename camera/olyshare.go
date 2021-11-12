@@ -153,7 +153,7 @@ func (i *Importer) Import(ctx context.Context, cam *Camera, cli *http.Client) (e
 						cx := carbon.Now().SubDays(i.CopyDays)
 						if carbon.NewCarbon(taken).Unix() < cx.Unix() {
 							cancel()
-							return nil
+							return fmt.Errorf("all images are older so stopping here")
 						}
 
 						fn := strings.Split(img.ID, "/")
