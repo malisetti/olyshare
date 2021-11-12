@@ -64,10 +64,10 @@ func main() {
 
 	var skipContentTypes []string
 	if *skipMov {
-		skipContentTypes = append(skipContentTypes, "video/quicktime")
+		skipContentTypes = append(skipContentTypes, "video/quicktime", "video/x-msvideo")
 	}
 	if *skipRaw {
-		skipContentTypes = append(skipContentTypes, "image/jpeg")
+		skipContentTypes = append(skipContentTypes, "image/x-olympus-orf")
 	}
 	if *importRoutines <= 0 || *importRoutines >= 5 {
 		*importRoutines = 2
@@ -80,7 +80,7 @@ func main() {
 	}
 	err := imp.Import(appCtx, cam, &client)
 	if err != nil {
-		fmt.Fprint(os.Stderr, err)
+		fmt.Printf("import error: %v\n", err)
 	}
 	close(interruptions)
 }

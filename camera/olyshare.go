@@ -30,11 +30,11 @@ type Camera struct {
 }
 
 func (c *Camera) ListImages(ctx context.Context, cli *http.Client) (images []*Image, err error) {
-	r0, err := http.NewRequestWithContext(ctx, http.MethodGet, c.ImagesURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.ImagesURL, nil)
 	if err != nil {
 		return
 	}
-	resp, err := cli.Do(r0)
+	resp, err := cli.Do(req)
 	if err != nil {
 		return
 	}
@@ -60,46 +60,52 @@ func (c *Camera) ListImages(ctx context.Context, cli *http.Client) (images []*Im
 }
 
 type Image struct {
-	ID string
+	ID    string
+	Taken time.Time
+	Type  string
 }
 
 func (i *Image) ContentType(ctx context.Context, camIP string, cli *http.Client) (contentType string, err error) {
 	imgURL := fmt.Sprintf(camIP+"%s", i.ID)
-	r1, err := http.NewRequestWithContext(ctx, http.MethodHead, imgURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, imgURL, nil)
 	if err != nil {
 		return
 	}
-	resp0, err := cli.Do(r1)
+	resp0, err := cli.Do(req)
 	if err != nil {
 		return
 	}
 	contentType = resp0.Header.Get("Content-Type")
+	i.Type = contentType
 	return
 }
 
 func (i *Image) Grab(ctx context.Context, camIP string, cli *http.Client) (body *[]byte, taken time.Time, err error) {
 	imgURL := fmt.Sprintf(camIP+"%s", i.ID)
-	r2, err := http.NewRequestWithContext(ctx, http.MethodGet, imgURL, nil)
+	fmt.Printf("grabbing image %s\n", imgURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, imgURL, nil)
 	if err != nil {
 		return
 	}
-	resp, err := cli.Do(r2)
+	resp, err := cli.Do(req)
 	if err != nil {
 		return
 	}
 	defer resp.Body.Close()
-	b, err := ioutil.ReadAll(resp.Body)
+	var b []byte
+	b, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return &b, taken, err
+		return
 	}
 
-	xif, err := exif.Decode(bytes.NewReader(b))
+	var xif *exif.Exif
+	xif, err = exif.Decode(bytes.NewReader(b))
 	if err != nil {
 		return
 	}
 
 	taken, err = xif.DateTime()
-	return
+	return &b, taken, err
 }
 
 type Importer struct {
@@ -110,7 +116,10 @@ type Importer struct {
 }
 
 func (i *Importer) Import(ctx context.Context, cam *Camera, cli *http.Client) (err error) {
-	images, err := cam.ListImages(ctx, cli)
+	ctxx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	images, err := cam.ListImages(ctxx, cli)
 	if err != nil {
 		return
 	}
@@ -120,10 +129,7 @@ func (i *Importer) Import(ctx context.Context, cam *Camera, cli *http.Client) (e
 		skipCtMap[v] = v
 	}
 
-	ctxx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	imchan := make(chan *Image)
+	imgchan := make(chan *Image)
 	errchan := make(chan error)
 	var wg sync.WaitGroup
 	go func() {
@@ -133,26 +139,30 @@ func (i *Importer) Import(ctx context.Context, cam *Camera, cli *http.Client) (e
 
 	for j := 0; j < i.ImportRoutines; j++ {
 		wg.Add(1)
-		go func() {
+		go func(wg sync.WaitGroup) {
 			defer wg.Done()
-			for ctxx.Err() == nil {
+			for ctx.Err() == nil {
 				select {
-				case img := <-imchan:
+				case img := <-imgchan:
+					if img == nil {
+						return
+					}
 					err := func(img *Image) error {
 						var body *[]byte
 						var taken time.Time
-						body, taken, err = img.Grab(ctx, cam.IP, cli)
+						body, taken, err = img.Grab(ctxx, cam.IP, cli)
 						if err != nil {
 							return err
 						}
-						if i.CopyDays != 0 {
-							cx := carbon.Now().SubDays(i.CopyDays)
-							if carbon.NewCarbon(taken).Unix() < cx.Unix() {
-								return nil
-							}
+						img.Taken = taken
+						cx := carbon.Now().SubDays(i.CopyDays)
+						if carbon.NewCarbon(taken).Unix() < cx.Unix() {
+							cancel()
+							return nil
 						}
 
-						p := i.WriteDir + DirSep + img.ID
+						fn := strings.Split(img.ID, "/")
+						p := i.WriteDir + DirSep + fn[len(fn)-1]
 						f, err := os.Create(p)
 						if err != nil {
 							return fmt.Errorf("file create %s failed with %v", img.ID, err)
@@ -165,6 +175,7 @@ func (i *Importer) Import(ctx context.Context, cam *Camera, cli *http.Client) (e
 								return fmt.Errorf("file create %s failed with %v", img.ID, err)
 							}
 						}
+						fmt.Printf("imported file to %s\n", p)
 						return nil
 					}(img)
 
@@ -177,16 +188,17 @@ func (i *Importer) Import(ctx context.Context, cam *Camera, cli *http.Client) (e
 					return
 				}
 			}
-		}()
+		}(wg)
 	}
 
 	for _, img := range images {
-		if _, err := os.Stat(i.WriteDir + DirSep + img.ID); err == nil {
+		fn := strings.Split(img.ID, "/")
+		if _, err := os.Stat(i.WriteDir + DirSep + fn[len(fn)-1]); err == nil {
 			continue
 		}
 
 		var ct string
-		ct, err = img.ContentType(ctx, cam.IP, cli)
+		ct, err = img.ContentType(ctxx, cam.IP, cli)
 		if err != nil {
 			return
 		}
@@ -194,10 +206,10 @@ func (i *Importer) Import(ctx context.Context, cam *Camera, cli *http.Client) (e
 			continue
 		}
 
-		imchan <- img
+		imgchan <- img
 	}
 
-	close(imchan)
+	close(imgchan)
 
 	return <-errchan
 }
