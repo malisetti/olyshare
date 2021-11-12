@@ -25,18 +25,16 @@ func init() {
 const DirSep = string(os.PathSeparator)
 
 type Camera struct {
-	*http.Client
 	IP        string
-	ImagesURL func() string
+	ImagesURL string
 }
 
-func (c *Camera) ListImages(ctx context.Context) (images []*Image, err error) {
-	listImgs := c.ImagesURL()
-	r0, err := http.NewRequestWithContext(ctx, http.MethodGet, listImgs, nil)
+func (c *Camera) ListImages(ctx context.Context, cli *http.Client) (images []*Image, err error) {
+	r0, err := http.NewRequestWithContext(ctx, http.MethodGet, c.ImagesURL, nil)
 	if err != nil {
 		return
 	}
-	resp, err := c.Do(r0)
+	resp, err := cli.Do(r0)
 	if err != nil {
 		return
 	}
@@ -49,8 +47,7 @@ func (c *Camera) ListImages(ctx context.Context) (images []*Image, err error) {
 			fn := strings.Join(parts[:2], "/")
 			defer func(fn string) {
 				images = append(images, &Image{
-					ID:     fn,
-					Client: c.Client,
+					ID: fn,
 				})
 			}(fn)
 		}
@@ -63,19 +60,16 @@ func (c *Camera) ListImages(ctx context.Context) (images []*Image, err error) {
 }
 
 type Image struct {
-	*http.Client
-
 	ID string
 }
 
-func (i *Image) ContentType(ctx context.Context, camIP string) (contentType string, err error) {
-	getImg := camIP + "%s"
-	imgURL := fmt.Sprintf(getImg, i.ID)
+func (i *Image) ContentType(ctx context.Context, camIP string, cli *http.Client) (contentType string, err error) {
+	imgURL := fmt.Sprintf(camIP+"%s", i.ID)
 	r1, err := http.NewRequestWithContext(ctx, http.MethodHead, imgURL, nil)
 	if err != nil {
 		return
 	}
-	resp0, err := i.Do(r1)
+	resp0, err := cli.Do(r1)
 	if err != nil {
 		return
 	}
@@ -83,14 +77,13 @@ func (i *Image) ContentType(ctx context.Context, camIP string) (contentType stri
 	return
 }
 
-func (i *Image) Grab(ctx context.Context, camIP string) (body *[]byte, taken time.Time, err error) {
-	getImg := camIP + "%s"
-	imgURL := fmt.Sprintf(getImg, i.ID)
+func (i *Image) Grab(ctx context.Context, camIP string, cli *http.Client) (body *[]byte, taken time.Time, err error) {
+	imgURL := fmt.Sprintf(camIP+"%s", i.ID)
 	r2, err := http.NewRequestWithContext(ctx, http.MethodGet, imgURL, nil)
 	if err != nil {
 		return
 	}
-	resp, err := i.Do(r2)
+	resp, err := cli.Do(r2)
 	if err != nil {
 		return
 	}
@@ -114,12 +107,10 @@ type Importer struct {
 	CopyDays         int
 	WriteDir         string
 	ImportRoutines   int
-
-	Camera *Camera
 }
 
-func (i *Importer) Import(ctx context.Context) (err error) {
-	images, err := i.Camera.ListImages(ctx)
+func (i *Importer) Import(ctx context.Context, cam *Camera, cli *http.Client) (err error) {
+	images, err := cam.ListImages(ctx, cli)
 	if err != nil {
 		return
 	}
@@ -150,7 +141,7 @@ func (i *Importer) Import(ctx context.Context) (err error) {
 					err := func(img *Image) error {
 						var body *[]byte
 						var taken time.Time
-						body, taken, err = img.Grab(ctx, i.Camera.IP)
+						body, taken, err = img.Grab(ctx, cam.IP, cli)
 						if err != nil {
 							return err
 						}
@@ -195,7 +186,7 @@ func (i *Importer) Import(ctx context.Context) (err error) {
 		}
 
 		var ct string
-		ct, err = img.ContentType(ctx, i.Camera.IP)
+		ct, err = img.ContentType(ctx, cam.IP, cli)
 		if err != nil {
 			return
 		}

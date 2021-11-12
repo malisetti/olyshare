@@ -14,12 +14,13 @@ import (
 )
 
 var (
-	camIP    *string
-	cacheDir *string
-	outDir   *string
-	skipMov  *bool
-	skipRaw  *bool
-	copyDays *int
+	camIP          *string
+	cacheDir       *string
+	outDir         *string
+	skipMov        *bool
+	skipRaw        *bool
+	copyDays       *int
+	importRoutines *int
 )
 
 func init() {
@@ -29,6 +30,7 @@ func init() {
 	skipMov = flag.Bool("skip-movie", false, "skips mov files")
 	skipRaw = flag.Bool("skip-raw", false, "skips raw files")
 	copyDays = flag.Int("copy-days", 1, "specifies number of days to copy images from")
+	importRoutines = flag.Int("import-routines", 2, "specifies number of routines used to copy images at a time")
 
 	flag.Parse()
 }
@@ -56,12 +58,8 @@ func main() {
 	}
 
 	cam := &camera.Camera{
-		Client: &client,
-		IP:     *camIP,
-		ImagesURL: func() string {
-			// "http://192.168.0.10/get_imglist.cgi?DIR=%s"
-			return *camIP + "/get_imglist.cgi?DIR=/DCIM/100OLYMP"
-		},
+		IP:        *camIP,
+		ImagesURL: *camIP + "/get_imglist.cgi?DIR=/DCIM/100OLYMP", // "http://192.168.0.10/get_imglist.cgi?DIR=%s"
 	}
 
 	var skipContentTypes []string
@@ -71,15 +69,16 @@ func main() {
 	if *skipRaw {
 		skipContentTypes = append(skipContentTypes, "image/jpeg")
 	}
+	if *importRoutines <= 0 || *importRoutines >= 5 {
+		*importRoutines = 2
+	}
 	imp := &camera.Importer{
 		SkipContentTypes: &skipContentTypes,
 		CopyDays:         *copyDays,
 		WriteDir:         *outDir,
-		ImportRoutines:   2,
-
-		Camera: cam,
+		ImportRoutines:   *importRoutines,
 	}
-	err := imp.Import(appCtx)
+	err := imp.Import(appCtx, cam, &client)
 	if err != nil {
 		fmt.Fprint(os.Stderr, err)
 	}
