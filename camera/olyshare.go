@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -21,8 +22,6 @@ import (
 func init() {
 	exif.RegisterParsers(mknote.All...)
 }
-
-const DirSep = string(os.PathSeparator)
 
 type Camera struct {
 	IP        string
@@ -127,13 +126,12 @@ func (i *Importer) Import(ctx context.Context, cam *Camera, cli *http.Client) (e
 	imgchan := make(chan *Image)
 	errchan := make(chan error)
 	var wg sync.WaitGroup
+	wg.Add(i.ImportRoutines)
 	go func() {
 		wg.Wait()
 		close(errchan)
 	}()
-
 	for j := 0; j < i.ImportRoutines; j++ {
-		wg.Add(1)
 		go func(wg sync.WaitGroup) {
 			defer wg.Done()
 			for ctx.Err() == nil {
@@ -156,7 +154,7 @@ func (i *Importer) Import(ctx context.Context, cam *Camera, cli *http.Client) (e
 						}
 
 						fn := strings.Split(img.ID, "/")
-						p := i.WriteDir + DirSep + fn[len(fn)-1]
+						p := filepath.Join(i.WriteDir, fn[len(fn)-1])
 						f, err := os.Create(p)
 						if err != nil {
 							return fmt.Errorf("file create %s failed with %v", img.ID, err)
@@ -187,7 +185,8 @@ func (i *Importer) Import(ctx context.Context, cam *Camera, cli *http.Client) (e
 	go func() {
 		for _, img := range images {
 			fn := strings.Split(img.ID, "/")
-			if _, err := os.Stat(i.WriteDir + DirSep + fn[len(fn)-1]); err == nil {
+			p := filepath.Join(i.WriteDir, fn[len(fn)-1])
+			if _, err := os.Stat(p); err == nil {
 				continue
 			}
 
