@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/gregjones/httpcache"
 	"github.com/gregjones/httpcache/diskcache"
@@ -57,7 +56,6 @@ func main() {
 
 	client := http.Client{
 		Transport: httpcache.NewTransport(diskcache.New(*cacheDir)),
-		Timeout:   30 * time.Second,
 	}
 
 	cam := &camera.Camera{
