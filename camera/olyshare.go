@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -107,7 +106,7 @@ func (i *Image) Grab(ctx context.Context, camIP string, cli *http.Client) (body 
 	}
 	defer resp.Body.Close()
 	var b []byte
-	b, err = ioutil.ReadAll(resp.Body)
+	b, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return
 	}

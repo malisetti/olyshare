@@ -28,8 +28,8 @@ func init() {
 	camIP = flag.String("cam-ip", "http://192.168.0.10", "camera ip")
 	cacheDir = flag.String("cache-dir", ".cache", "cache directory")
 	outDir = flag.String("out-dir", "output", "output directory")
-	skipMov = flag.Bool("skip-movie", true, "skips mov files")
-	skipRaw = flag.Bool("skip-raw", true, "skips raw files")
+	skipMov = flag.Bool("skip-movie", false, "skips mov files")
+	skipRaw = flag.Bool("skip-raw", false, "skips raw files")
 	copyDays = flag.Int("copy-days", 1, "specifies number of days to copy images from")
 	importRoutines = flag.Int("import-routines", 2, "specifies number of routines used to copy images at a time")
 
