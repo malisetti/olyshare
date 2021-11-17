@@ -37,11 +37,15 @@ func (c *Camera) ListImages(ctx context.Context, cli *http.Client, skipFilters [
 	if err != nil {
 		return imgchan, err
 	}
+	defer resp.Body.Close()
+	buf, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return imgchan, err
+	}
 	go func() {
+		scanner := bufio.NewScanner(bytes.NewReader(buf))
 		defer close(imgchan)
-		defer resp.Body.Close()
-		scanner := bufio.NewScanner(resp.Body)
-		for scanner.Scan() {
+		for scanner.Scan() && ctx.Err() == nil {
 			txt := scanner.Text()
 			if strings.HasPrefix(txt, "/") {
 				parts := strings.Split(txt, ",")
@@ -93,7 +97,7 @@ func (i *Image) ContentType(ctx context.Context, camIP string, cli *http.Client)
 	return
 }
 
-func (i *Image) Grab(ctx context.Context, camIP string, cli *http.Client) (body *[]byte, taken time.Time, err error) {
+func (i *Image) Grab(ctx context.Context, camIP string, cli *http.Client) (body []byte, taken time.Time, err error) {
 	imgURL := fmt.Sprintf(camIP+"%s", i.ID)
 	fmt.Printf("grabbing image %s\n", imgURL)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, imgURL, nil)
@@ -105,8 +109,7 @@ func (i *Image) Grab(ctx context.Context, camIP string, cli *http.Client) (body 
 		return
 	}
 	defer resp.Body.Close()
-	var b []byte
-	b, err = io.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return
 	}
@@ -118,7 +121,7 @@ func (i *Image) Grab(ctx context.Context, camIP string, cli *http.Client) (body 
 	}
 
 	taken, err = xif.DateTime()
-	return &b, taken, err
+	return b, taken, err
 }
 
 type Importer struct {
@@ -185,7 +188,6 @@ func (i *Importer) Import(ctx context.Context, cam *Camera, cli *http.Client) (e
 }
 
 func (i *Importer) StoreImage(ctx context.Context, cli *http.Client, img *Image, camIP string) error {
-	var body *[]byte
 	var taken time.Time
 	body, taken, err := img.Grab(ctx, camIP, cli)
 	if err != nil {
@@ -204,7 +206,7 @@ func (i *Importer) StoreImage(ctx context.Context, cli *http.Client, img *Image,
 		return fmt.Errorf("file create %s failed with %v", img.ID, err)
 	}
 	defer f.Close()
-	_, err = io.Copy(f, bytes.NewReader(*body))
+	_, err = io.Copy(f, bytes.NewReader(body))
 	if err == nil {
 		err := f.Sync()
 		if err != nil {
