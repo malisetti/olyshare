@@ -166,18 +166,13 @@ func (i *Importer) Import(ctx context.Context, cam *Camera, cli *http.Client) (e
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for {
-				select {
-				case img := <-imgchan:
-					if img == nil {
-						return
-					}
-					err := i.StoreImage(ctx, cli, img, cam.IP)
-					if err != nil {
-						errchan <- err
-						return
-					}
-				case <-ctx.Done():
+			for img := range imgchan {
+				if img == nil {
+					return
+				}
+				err := i.StoreImage(ctx, cli, img, cam.IP)
+				if err != nil {
+					errchan <- err
 					return
 				}
 			}
