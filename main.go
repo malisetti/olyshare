@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -54,10 +53,6 @@ func main() {
 		cancel()
 	}()
 
-	client := http.Client{
-		Transport: httpcache.NewTransport(diskcache.New(*cacheDir)),
-	}
-
 	cam := &camera.Camera{
 		IP:        *camIP,
 		ImagesURL: *camIP + "/get_imglist.cgi?DIR=/DCIM/100OLYMP", // "http://192.168.0.10/get_imglist.cgi?DIR=%s"
@@ -81,7 +76,7 @@ func main() {
 		WriteDir:         *outDir,
 		ImportRoutines:   *importRoutines,
 	}
-	err := imp.Import(appCtx, cam, &client)
+	err := imp.Import(appCtx, cam, httpcache.NewTransport(diskcache.New(*cacheDir)).Client())
 	if err != nil {
 		fmt.Printf("import error: %v\n", err)
 	}
