@@ -39,7 +39,7 @@ func init() {
 // /DCIM/100OLYMP,P3300029.JPG,2964502,0,19582,35122
 func main() {
 	for _, v := range []string{*cacheDir, *outDir} {
-		if _, err := os.Stat(v); os.IsNotExist(err) {
+		if stat, err := os.Stat(v); os.IsNotExist(err) || !stat.IsDir() {
 			fmt.Fprintf(os.Stderr, "given dir %s does not exist, failed with %v\n", *outDir, err)
 			return
 		}
