@@ -61,9 +61,9 @@ func (c *Camera) ListImages(ctx context.Context, cli *http.Client, skipFilters [
 					}
 				}
 				if !skip {
-					defer func(fn string) {
+					defer func(img *Image) {
 						imgchan <- img
-					}(fn)
+					}(img)
 				}
 			}
 
