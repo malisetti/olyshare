@@ -9,11 +9,14 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/gregjones/httpcache"
+	"github.com/gregjones/httpcache/diskcache"
 	"github.com/mseshachalam/olyshare/camera"
 )
 
 var (
 	camIP          *string
+	cacheDir       *string
 	outDir         *string
 	skipMov        *bool
 	skipRaw        *bool
@@ -23,6 +26,7 @@ var (
 
 func init() {
 	camIP = flag.String("cam-ip", "http://192.168.0.10", "camera ip")
+	cacheDir = flag.String("cache-dir", ".cache", "cache directory")
 	outDir = flag.String("out-dir", "output", "output directory")
 	skipMov = flag.Bool("skip-movie", false, "skips mov files")
 	skipRaw = flag.Bool("skip-raw", false, "skips raw files")
@@ -35,9 +39,11 @@ func init() {
 // /DCIM/100OLYMP/P8301116.JPG
 // /DCIM/100OLYMP,P3300029.JPG,2964502,0,19582,35122
 func main() {
-	if stat, err := os.Stat(*outDir); os.IsNotExist(err) || !stat.IsDir() {
-		fmt.Fprintf(os.Stderr, "output dir %s does not exist or is not a dir, failed with %v\n", *outDir, err)
-		return
+	for _, v := range []string{*cacheDir, *outDir} {
+		if _, err := os.Stat(v); os.IsNotExist(err) {
+			fmt.Fprintf(os.Stderr, "given dir %s does not exist, failed with %v\n", *outDir, err)
+			return
+		}
 	}
 
 	appCtx, cancel := context.WithCancel(context.Background())
@@ -47,6 +53,10 @@ func main() {
 		<-interruptions
 		cancel()
 	}()
+
+	client := http.Client{
+		Transport: httpcache.NewTransport(diskcache.New(*cacheDir)),
+	}
 
 	cam := &camera.Camera{
 		IP:        *camIP,
@@ -71,7 +81,7 @@ func main() {
 		WriteDir:         *outDir,
 		ImportRoutines:   *importRoutines,
 	}
-	err := imp.Import(appCtx, cam, &http.Client{})
+	err := imp.Import(appCtx, cam, &client)
 	if err != nil {
 		fmt.Printf("import error: %v\n", err)
 	}
