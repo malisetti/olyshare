@@ -99,7 +99,6 @@ func (i *Image) ContentType(ctx context.Context, camIP string, cli *http.Client)
 
 func (i *Image) Grab(ctx context.Context, camIP string, cli *http.Client) (body []byte, taken time.Time, err error) {
 	imgURL := fmt.Sprintf(camIP+"%s", i.ID)
-	fmt.Printf("grabbing image %s\n", imgURL)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, imgURL, nil)
 	if err != nil {
 		return
@@ -109,19 +108,20 @@ func (i *Image) Grab(ctx context.Context, camIP string, cli *http.Client) (body 
 		return
 	}
 	defer resp.Body.Close()
-	b, err := io.ReadAll(resp.Body)
+	body, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return
 	}
 
-	var xif *exif.Exif
-	xif, err = exif.Decode(bytes.NewReader(b))
+	xif, err := exif.Decode(bytes.NewReader(body))
 	if err != nil {
 		return
 	}
 
 	taken, err = xif.DateTime()
-	return b, taken, err
+	fmt.Printf("dowloading image %s taken on %s\n", imgURL, carbon.NewCarbon(taken).FormattedDateString())
+
+	return body, taken, err
 }
 
 type Importer struct {
@@ -183,15 +183,15 @@ func (i *Importer) Import(ctx context.Context, cam *Camera, cli *http.Client) (e
 }
 
 func (i *Importer) StoreImage(ctx context.Context, cli *http.Client, img *Image, camIP string) error {
-	var taken time.Time
 	body, taken, err := img.Grab(ctx, camIP, cli)
 	if err != nil {
 		return err
 	}
 	img.Taken = taken
 	cx := carbon.Now().SubDays(i.CopyDays)
-	if carbon.NewCarbon(taken).Unix() < cx.Unix() {
-		return fmt.Errorf("all images are older so stopping here")
+	cxt := carbon.NewCarbon(taken)
+	if cxt.Unix() < cx.Unix() {
+		return fmt.Errorf("remaining images are older than %s so stopping here", cxt.FormattedDateString())
 	}
 
 	fn := strings.Split(img.ID, "/")
