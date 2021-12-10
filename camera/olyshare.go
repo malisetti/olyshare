@@ -53,7 +53,7 @@ func (c *Camera) ListImages(ctx context.Context, cli *http.Client, skipFilters [
 				img := &Image{
 					ID: fn,
 				}
-				var skip bool
+				skip := false
 				for _, f := range skipFilters {
 					if f(img) {
 						skip = true
