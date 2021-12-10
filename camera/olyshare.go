@@ -61,9 +61,9 @@ func (c *Camera) ListImages(ctx context.Context, cli *http.Client, skipFilters [
 					}
 				}
 				if !skip {
-					defer func(img *Image) {
+					defer func() {
 						imgchan <- img
-					}(img)
+					}()
 				}
 			}
 
@@ -159,8 +159,8 @@ func (i *Importer) Import(ctx context.Context, cam *Camera, cli *http.Client) (e
 	errchan := make(chan error)
 	var wg sync.WaitGroup
 	go func() {
+		defer close(errchan)
 		wg.Wait()
-		close(errchan)
 	}()
 	for j := 0; j < i.ImportRoutines; j++ {
 		wg.Add(1)
