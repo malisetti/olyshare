@@ -25,12 +25,12 @@ var (
 
 func init() {
 	flag.StringVar(&camIP, "cam-ip", "http://192.168.0.10", "camera ip")
-	flag.String(&cacheDir, "cache-dir", ".cache", "cache directory")
-	flag.String(&outDir, "out-dir", "output", "output directory")
-	flag.Bool(&skipMov, "skip-movie", false, "skips mov files")
-	flag.Bool(&skipRaw, "skip-raw", false, "skips raw files")
-	flag.Int(&copyDays, "copy-days", 1, "specifies number of days to copy images from")
-	flag.Int(&importRoutines, "import-routines", 2, "specifies number of routines used to copy images at a time")
+	flag.StringVar(&cacheDir, "cache-dir", ".cache", "cache directory")
+	flag.StringVar(&outDir, "out-dir", "output", "output directory")
+	flag.BoolVar(&skipMov, "skip-movie", false, "skips mov files")
+	flag.BoolVar(&skipRaw, "skip-raw", false, "skips raw files")
+	flag.IntVar(&copyDays, "copy-days", 1, "specifies number of days to copy images from")
+	flag.IntVar(&importRoutines, "import-routines", 2, "specifies number of routines used to copy images at a time")
 
 	flag.Parse()
 }
