@@ -6,6 +6,6 @@
         "**/CVS": true,
         "**/.DS_Store": true,
         "output": true,
-        "cache": true
+        ".cache": true
     }
 }
