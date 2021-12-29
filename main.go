@@ -14,23 +14,23 @@ import (
 )
 
 var (
-	camIP          *string
-	cacheDir       *string
-	outDir         *string
-	skipMov        *bool
-	skipRaw        *bool
-	copyDays       *int
-	importRoutines *int
+	camIP          string
+	cacheDir       string
+	outDir         string
+	skipMov        bool
+	skipRaw        bool
+	copyDays       int
+	importRoutines int
 )
 
 func init() {
-	camIP = flag.String("cam-ip", "http://192.168.0.10", "camera ip")
-	cacheDir = flag.String("cache-dir", ".cache", "cache directory")
-	outDir = flag.String("out-dir", "output", "output directory")
-	skipMov = flag.Bool("skip-movie", false, "skips mov files")
-	skipRaw = flag.Bool("skip-raw", false, "skips raw files")
-	copyDays = flag.Int("copy-days", 1, "specifies number of days to copy images from")
-	importRoutines = flag.Int("import-routines", 2, "specifies number of routines used to copy images at a time")
+	flag.StringVar(&camIP, "cam-ip", "http://192.168.0.10", "camera ip")
+	flag.String(&cacheDir, "cache-dir", ".cache", "cache directory")
+	flag.String(&outDir, "out-dir", "output", "output directory")
+	flag.Bool(&skipMov, "skip-movie", false, "skips mov files")
+	flag.Bool(&skipRaw, "skip-raw", false, "skips raw files")
+	flag.Int(&copyDays, "copy-days", 1, "specifies number of days to copy images from")
+	flag.Int(&importRoutines, "import-routines", 2, "specifies number of routines used to copy images at a time")
 
 	flag.Parse()
 }
@@ -38,9 +38,9 @@ func init() {
 // /DCIM/100OLYMP/P8301116.JPG
 // /DCIM/100OLYMP,P3300029.JPG,2964502,0,19582,35122
 func main() {
-	for _, v := range []string{*cacheDir, *outDir} {
+	for _, v := range []string{cacheDir, outDir} {
 		if stat, err := os.Stat(v); os.IsNotExist(err) || !stat.IsDir() {
-			fmt.Fprintf(os.Stderr, "given dir %s does not exist, failed with %v\n", *outDir, err)
+			fmt.Fprintf(os.Stderr, "given dir %s does not exist, failed with %v\n", outDir, err)
 			return
 		}
 	}
@@ -54,29 +54,29 @@ func main() {
 	}()
 
 	cam := &camera.Camera{
-		IP:        *camIP,
-		ImagesURL: *camIP + "/get_imglist.cgi?DIR=/DCIM/100OLYMP", // "http://192.168.0.10/get_imglist.cgi?DIR=%s"
+		IP:        camIP,
+		ImagesURL: camIP + "/get_imglist.cgi?DIR=/DCIM/100OLYMP", // "http://192.168.0.10/get_imglist.cgi?DIR=%s"
 	}
 
 	skipCtMap := make(map[string]struct{})
-	if *skipMov {
+	if skipMov {
 		skipCtMap["video/quicktime"] = struct{}{}
 		skipCtMap["video/x-msvideo"] = struct{}{}
 	}
-	if *skipRaw {
+	if skipRaw {
 		skipCtMap["image/x-olympus-orf"] = struct{}{}
 	}
 
-	if *importRoutines <= 0 || *importRoutines >= 5 {
-		*importRoutines = 2
+	if importRoutines <= 0 || importRoutines >= 5 {
+		importRoutines = 2
 	}
 	imp := &camera.Importer{
 		SkipContentTypes: skipCtMap,
-		CopyDays:         *copyDays,
-		WriteDir:         *outDir,
-		ImportRoutines:   *importRoutines,
+		CopyDays:         copyDays,
+		WriteDir:         outDir,
+		ImportRoutines:   importRoutines,
 	}
-	err := imp.Import(appCtx, cam, httpcache.NewTransport(diskcache.New(*cacheDir)).Client())
+	err := imp.Import(appCtx, cam, httpcache.NewTransport(diskcache.New(cacheDir)).Client())
 	if err != nil {
 		fmt.Printf("import error: %v\n", err)
 	}
