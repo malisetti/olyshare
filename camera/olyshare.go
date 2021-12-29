@@ -88,11 +88,11 @@ func (i *Image) ContentType(ctx context.Context, camIP string, cli *http.Client)
 	if err != nil {
 		return
 	}
-	resp0, err := cli.Do(req)
+	resp, err := cli.Do(req)
 	if err != nil {
 		return
 	}
-	contentType = resp0.Header.Get("Content-Type")
+	contentType = resp.Header.Get("Content-Type")
 	i.Type = contentType
 	return
 }
