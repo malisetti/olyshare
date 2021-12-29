@@ -28,3 +28,5 @@ jobs:
         goarch: ${{ matrix.goarch }}
         binary_name: "olyshare"
         extra_files: README.md
+        ldflags: "-s -w"
+        executable_compression: upx
