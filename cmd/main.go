@@ -10,7 +10,7 @@ import (
 
 	"github.com/gregjones/httpcache"
 	"github.com/gregjones/httpcache/diskcache"
-	"github.com/mseshachalam/olyshare/camera"
+	"olyshare/camera"
 )
 
 var (
