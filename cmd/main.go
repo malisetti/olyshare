@@ -3,15 +3,12 @@ package main
 import (
 	"bytes"
 	"context"
-	"embed"
+	_ "embed"
 	"flag"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"os/signal"
-	"path/filepath"
-	"strings"
 	"syscall"
 
 	"olyshare/camera"
@@ -42,47 +39,18 @@ func init() {
 	flag.Parse()
 }
 
-/**
-//go:generate rm -rf src
-//go:generate mkdir -p src/cmd
-//go:generate cp -r ../camera ../go.mod ../go.sum src/
-//go:generate cp main.go src/cmd/
-//go:generate mv src/go.mod src/x.mod
-//go:generate mv src/go.sum src/x.sum
-**/
-//go:embed src
-var source embed.FS
+//go:embed src.zip
+var source []byte
 
 // /DCIM/100OLYMP/P8301116.JPG
 // /DCIM/100OLYMP,P3300029.JPG,2964502,0,19582,35122
 func main() {
 	if len(os.Args) >= 1 && os.Args[1] == "src" {
-		err := fs.WalkDir(source, "src", func(path string, d fs.DirEntry, err error) error {
-			if d.IsDir() {
-				err := os.MkdirAll(path, 0700)
-				if err != nil {
-					return err
-				}
-			} else {
-				pathx := path
-				if strings.HasPrefix(d.Name(), "x.") {
-					pathx = filepath.Join(filepath.Dir(path), strings.Replace(d.Name(), "x.", "go.", 1))
-				}
-				f, err := os.Create(pathx)
-				if err != nil {
-					return err
-				}
-				src, err := source.ReadFile(path)
-				if err != nil {
-					return err
-				}
-				_, err = io.Copy(f, bytes.NewReader(src))
-				if err != nil {
-					return err
-				}
-			}
-			return nil
-		})
+		s, err := os.Create("src.zip")
+		if err != nil {
+			panic(err)
+		}
+		_, err = io.Copy(s, bytes.NewReader(source))
 		if err != nil {
 			panic(err)
 		}
