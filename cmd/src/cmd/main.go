@@ -42,14 +42,12 @@ func init() {
 	flag.Parse()
 }
 
-/**
 //go:generate rm -rf src
 //go:generate mkdir -p src/cmd
 //go:generate cp -r ../camera ../go.mod ../go.sum src/
 //go:generate cp main.go src/cmd/
 //go:generate mv src/go.mod src/x.mod
 //go:generate mv src/go.sum src/x.sum
-**/
 //go:embed src
 var source embed.FS
 
