@@ -43,8 +43,8 @@ func (c *Camera) ListImages(ctx context.Context, cli *http.Client, skipFilters [
 		return imgchan, err
 	}
 	go func() {
-		scanner := bufio.NewScanner(bytes.NewReader(buf))
 		defer close(imgchan)
+		scanner := bufio.NewScanner(bytes.NewReader(buf))
 		for scanner.Scan() && ctx.Err() == nil {
 			txt := scanner.Text()
 			if strings.HasPrefix(txt, "/") {
@@ -80,6 +80,12 @@ type Image struct {
 	ID    string
 	Taken time.Time
 	Type  string
+}
+
+func (i *Image) Id() string {
+	fn := strings.Split(i.ID, "/")
+
+	return fn[len(fn)-1]
 }
 
 func (i *Image) ContentType(ctx context.Context, camIP string, cli *http.Client) (contentType string, err error) {
@@ -134,8 +140,7 @@ type Importer struct {
 func (i *Importer) Import(ctx context.Context, cam *Camera, cli *http.Client) (err error) {
 	imgchan, err := cam.ListImages(ctx, cli, []func(img *Image) bool{
 		func(img *Image) bool {
-			fn := strings.Split(img.ID, "/")
-			p := filepath.Join(i.WriteDir, fn[len(fn)-1])
+			p := filepath.Join(i.WriteDir, img.Id())
 			if _, err := os.Stat(p); err == nil {
 				return true
 			}
@@ -194,8 +199,7 @@ func (i *Importer) StoreImage(ctx context.Context, cli *http.Client, img *Image,
 		return fmt.Errorf("remaining images are older than %s so stopping here", cxt.FormattedDateString())
 	}
 
-	fn := strings.Split(img.ID, "/")
-	p := filepath.Join(i.WriteDir, fn[len(fn)-1])
+	p := filepath.Join(i.WriteDir, img.Id())
 	f, err := os.Create(p)
 	if err != nil {
 		return fmt.Errorf("file create %s failed with %v", img.ID, err)
