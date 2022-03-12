@@ -42,36 +42,35 @@ func (c *Camera) ListImages(ctx context.Context, cli *http.Client, skipFilters [
 	if err != nil {
 		return imgchan, err
 	}
-	go func() {
-		defer close(imgchan)
-		scanner := bufio.NewScanner(bytes.NewReader(buf))
-		for scanner.Scan() && ctx.Err() == nil {
-			txt := scanner.Text()
-			if strings.HasPrefix(txt, "/") {
-				parts := strings.Split(txt, ",")
-				fn := strings.Join(parts[:2], "/")
-				img := &Image{
-					ID: fn,
+	defer close(imgchan)
+	scanner := bufio.NewScanner(bytes.NewReader(buf))
+	for ctx.Err() == nil && scanner.Scan() {
+		txt := scanner.Text()
+		if strings.HasPrefix(txt, "/") {
+			parts := strings.Split(txt, ",")
+			fn := strings.Join(parts[:2], "/")
+			img := &Image{
+				ID: fn,
+			}
+			skip := false
+			for _, f := range skipFilters {
+				if f(img) {
+					skip = true
+					break
 				}
-				skip := false
-				for _, f := range skipFilters {
-					if f(img) {
-						skip = true
-						break
-					}
-				}
-				if !skip {
-					defer func() {
+			}
+			if !skip {
+				defer func() {
+					go func() {
 						imgchan <- img
 					}()
-				}
-			}
-
-			if err = scanner.Err(); err != nil {
-				return
+				}()
 			}
 		}
-	}()
+	}
+	if err = scanner.Err(); err != nil {
+		return imgchan, err
+	}
 
 	return imgchan, nil
 }
