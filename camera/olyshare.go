@@ -44,6 +44,7 @@ func (c *Camera) ListImages(ctx context.Context, cli *http.Client, skipFilters [
 	}
 	defer close(imgchan)
 	scanner := bufio.NewScanner(bytes.NewReader(buf))
+	var mx sync.Mutex
 	for ctx.Err() == nil && scanner.Scan() {
 		txt := scanner.Text()
 		if strings.HasPrefix(txt, "/") {
@@ -60,11 +61,13 @@ func (c *Camera) ListImages(ctx context.Context, cli *http.Client, skipFilters [
 				}
 			}
 			if !skip {
-				defer func() {
+				mx.Lock()
+				defer func(mx *sync.Mutex) {
 					go func() {
+						defer mx.Unlock()
 						imgchan <- img
 					}()
-				}()
+				}(&mx)
 			}
 		}
 	}
