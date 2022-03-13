@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -42,38 +43,36 @@ func (c *Camera) ListImages(ctx context.Context, cli *http.Client, skipFilters [
 	if err != nil {
 		return imgchan, err
 	}
-	defer close(imgchan)
-	scanner := bufio.NewScanner(bytes.NewReader(buf))
-	var mx sync.Mutex
-	for ctx.Err() == nil && scanner.Scan() {
-		txt := scanner.Text()
-		if strings.HasPrefix(txt, "/") {
-			parts := strings.Split(txt, ",")
-			fn := strings.Join(parts[:2], "/")
-			img := &Image{
-				ID: fn,
-			}
-			skip := false
-			for _, f := range skipFilters {
-				if f(img) {
-					skip = true
-					break
+	go func() {
+		defer close(imgchan)
+		scanner := bufio.NewScanner(bytes.NewReader(buf))
+
+		for ctx.Err() == nil && scanner.Scan() {
+			txt := scanner.Text()
+			if strings.HasPrefix(txt, "/") {
+				parts := strings.Split(txt, ",")
+				fn := strings.Join(parts[:2], "/")
+				img := &Image{
+					ID: fn,
 				}
-			}
-			if !skip {
-				mx.Lock()
-				defer func(mx *sync.Mutex) {
-					go func() {
-						defer mx.Unlock()
+				skip := false
+				for _, f := range skipFilters {
+					if f(img) {
+						skip = true
+						break
+					}
+				}
+				if !skip {
+					defer func() {
 						imgchan <- img
 					}()
-				}(&mx)
+				}
 			}
 		}
-	}
-	if err = scanner.Err(); err != nil {
-		return imgchan, err
-	}
+		if err = scanner.Err(); err != nil {
+			log.Fatal(err)
+		}
+	}()
 
 	return imgchan, nil
 }
