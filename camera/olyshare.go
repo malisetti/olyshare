@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -28,53 +27,53 @@ type Camera struct {
 	ImagesURL string
 }
 
-func (c *Camera) ListImages(ctx context.Context, cli *http.Client, skipFilters []func(*Image) bool) (<-chan *Image, error) {
-	imgchan := make(chan *Image)
+func (c *Camera) ListImages(ctx context.Context, cli *http.Client, skipFilters []func(*Image) bool) ([]*Image, error) {
+	var images []*Image
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.ImagesURL, nil)
 	if err != nil {
-		return imgchan, err
+		return images, err
 	}
 	resp, err := cli.Do(req)
 	if err != nil {
-		return imgchan, err
+		return images, err
 	}
 	defer resp.Body.Close()
 	buf, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return imgchan, err
+		return images, err
 	}
-	go func() {
-		defer close(imgchan)
-		scanner := bufio.NewScanner(bytes.NewReader(buf))
 
-		for ctx.Err() == nil && scanner.Scan() {
-			txt := scanner.Text()
-			if strings.HasPrefix(txt, "/") {
-				parts := strings.Split(txt, ",")
-				fn := strings.Join(parts[:2], "/")
-				img := &Image{
-					ID: fn,
-				}
-				skip := false
-				for _, f := range skipFilters {
-					if f(img) {
-						skip = true
-						break
-					}
-				}
-				if !skip {
-					defer func() {
-						imgchan <- img
-					}()
+	scanner := bufio.NewScanner(bytes.NewReader(buf))
+
+	for scanner.Scan() && ctx.Err() == nil {
+		txt := scanner.Text()
+		if strings.HasPrefix(txt, "/") {
+			parts := strings.Split(txt, ",")
+			fn := strings.Join(parts[:2], "/")
+			img := &Image{
+				ID: fn,
+			}
+			skip := false
+			for _, f := range skipFilters {
+				if f(img) {
+					skip = true
+					break
 				}
 			}
+			if !skip {
+				defer func() {
+					images = append(images, img)
+				}()
+			}
 		}
+	}
+	if !scanner.Scan() {
 		if err = scanner.Err(); err != nil {
-			log.Fatal(err)
+			return images, err
 		}
-	}()
+	}
 
-	return imgchan, nil
+	return images, nil
 }
 
 type Image struct {
@@ -139,7 +138,7 @@ type Importer struct {
 }
 
 func (i *Importer) Import(ctx context.Context, cam *Camera, cli *http.Client) (err error) {
-	imgchan, err := cam.ListImages(ctx, cli, []func(img *Image) bool{
+	images, err := cam.ListImages(ctx, cli, []func(img *Image) bool{
 		func(img *Image) bool {
 			p := filepath.Join(i.WriteDir, img.Id())
 			if _, err := os.Stat(p); err == nil {
@@ -163,6 +162,13 @@ func (i *Importer) Import(ctx context.Context, cam *Camera, cli *http.Client) (e
 	}
 
 	errchan := make(chan error)
+	imgchan := make(chan *Image)
+	go func() {
+		defer close(imgchan)
+		for _, img := range images {
+			imgchan <- img
+		}
+	}()
 	var wg sync.WaitGroup
 	go func() {
 		defer close(errchan)
