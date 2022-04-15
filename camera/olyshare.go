@@ -30,8 +30,12 @@ type Camera struct {
 func (c *Camera) ListImages(ctx context.Context, cli *http.Client, skipFilters []func(*Image) bool) ([]*Image, error) {
 	var images []*Image
 	defer func() {
-		for i, j := 0, len(images)-1; i < j; i, j = i+1, j-1 {
-			images[i], images[j] = images[j], images[i]
+		if ctx.Err() != nil {
+			images = nil
+		} else {
+			for i, j := 0, len(images)-1; i < j; i, j = i+1, j-1 {
+				images[i], images[j] = images[j], images[i]
+			}
 		}
 	}()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.ImagesURL, nil)
@@ -160,7 +164,7 @@ func (i *Importer) Import(ctx context.Context, cam *Camera, cli *http.Client) (e
 			return false
 		},
 	})
-	if err != nil {
+	if err != nil || len(images) == 0 {
 		return
 	}
 
