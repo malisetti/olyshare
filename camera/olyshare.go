@@ -29,6 +29,11 @@ type Camera struct {
 
 func (c *Camera) ListImages(ctx context.Context, cli *http.Client, skipFilters []func(*Image) bool) ([]*Image, error) {
 	var images []*Image
+	defer func() {
+		for i, j := 0, len(images)-1; i < j; i, j = i+1, j-1 {
+			images[i], images[j] = images[j], images[i]
+		}
+	}()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.ImagesURL, nil)
 	if err != nil {
 		return images, err
@@ -61,9 +66,7 @@ func (c *Camera) ListImages(ctx context.Context, cli *http.Client, skipFilters [
 				}
 			}
 			if !skip {
-				defer func() {
-					images = append(images, img)
-				}()
+				images = append(images, img)
 			}
 		}
 	}
@@ -174,17 +177,26 @@ func (i *Importer) Import(ctx context.Context, cam *Camera, cli *http.Client) (e
 		defer close(errchan)
 		wg.Wait()
 	}()
+	doneCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	for j := 0; j < i.ImportRoutines; j++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for img := range imgchan {
-				if img == nil {
-					return
-				}
-				err := i.StoreImage(ctx, cli, img, cam.IP)
-				if err != nil {
-					errchan <- err
+			for {
+				select {
+				case img := <-imgchan:
+					if img == nil {
+						cancel()
+						return
+					}
+					err := i.StoreImage(doneCtx, cli, img, cam.IP)
+					if err != nil {
+						errchan <- err
+						cancel()
+						return
+					}
+				case <-doneCtx.Done():
 					return
 				}
 			}
