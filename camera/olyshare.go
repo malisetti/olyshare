@@ -185,8 +185,8 @@ func (i *Importer) Import(ctx context.Context, cam *Camera, cli *http.Client) (e
 			defer wg.Done()
 			for {
 				select {
-				case img := <-imgchan:
-					if img == nil {
+				case img, ok := <-imgchan:
+					if !ok {
 						cancel()
 						return
 					}
