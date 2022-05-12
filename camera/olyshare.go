@@ -218,7 +218,7 @@ func (i *Importer) StoreImage(ctx context.Context, cli *http.Client, img *Image,
 	img.Taken = taken
 	cx := carbon.Now().SubDays(i.CopyDays)
 	cxt := carbon.NewCarbon(taken)
-	if cxt.Unix() < cx.Unix() {
+	if cxt.DiffInDays(cx, true) <= int64(i.CopyDays) {
 		return fmt.Errorf("remaining images are older than %s so stopping here", cxt.FormattedDateString())
 	}
 
