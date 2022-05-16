@@ -46,7 +46,12 @@ func (c *Camera) ListImages(ctx context.Context, cli *http.Client, skipFilters [
 	if err != nil {
 		return images, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		err := resp.Body.Close()
+		if err != nil {
+			fmt.Printf("resp body close %s failed with %v", c.ImagesURL, err)
+		}
+	}()
 	buf, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return images, err
@@ -120,7 +125,12 @@ func (i *Image) Grab(ctx context.Context, camIP string, cli *http.Client) (body 
 	if err != nil {
 		return
 	}
-	defer resp.Body.Close()
+	defer func() {
+		err := resp.Body.Close()
+		if err != nil {
+			fmt.Printf("resp body close %s failed with %v", imgURL, err)
+		}
+	}()
 	body, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return
@@ -227,7 +237,12 @@ func (i *Importer) StoreImage(ctx context.Context, cli *http.Client, img *Image,
 	if err != nil {
 		return fmt.Errorf("file create %s failed with %v", img.ID, err)
 	}
-	defer f.Close()
+	defer func() {
+		err := f.Close()
+		if err != nil {
+			fmt.Printf("file close %s failed with %v", img.ID, err)
+		}
+	}()
 	_, err = io.Copy(f, bytes.NewReader(body))
 	if err == nil {
 		err := f.Sync()
