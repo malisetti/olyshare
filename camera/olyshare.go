@@ -27,9 +27,9 @@ type Camera struct {
 	ImagesURL string
 }
 
-type SkipFilter[T any] func(*T) bool
+type SkipFilter[T any] func(T) bool
 
-func (c *Camera) ListImages(ctx context.Context, skipFilters []SkipFilter[Image], ImporterFunc ImporterSource) ([]*Image, error) {
+func (c *Camera) ListImages(ctx context.Context, skipFilters []SkipFilter[*Image], ImporterFunc ImporterSource) ([]*Image, error) {
 	var images []*Image
 	defer func() {
 		if ctx.Err() != nil {
@@ -61,14 +61,13 @@ func (c *Camera) ListImages(ctx context.Context, skipFilters []SkipFilter[Image]
 	return images, nil
 }
 
-func MakeImages(a []string, skipFilters []SkipFilter[Image]) []*Image {
+func MakeImages(a []string, skipFilters []SkipFilter[*Image]) []*Image {
 	var images []*Image
 	for _, txt := range a {
 		parts := strings.Split(txt, ",")
 		if len(parts) < 2 {
 			continue
 		}
-		// TODO: check len cond on parts
 		fn := strings.Join(parts[:2], "/")
 		img := &Image{
 			ID: fn,
@@ -187,7 +186,7 @@ type Importer struct {
 }
 
 func (i *Importer) Import(ctx context.Context, cam *Camera, cli *http.Client) (err error) {
-	images, err := cam.ListImages(ctx, []SkipFilter[Image]{
+	images, err := cam.ListImages(ctx, []SkipFilter[*Image]{
 		func(img *Image) bool {
 			p := filepath.Join(i.WriteDir, img.Id())
 			if _, err := os.Stat(p); err == nil {
