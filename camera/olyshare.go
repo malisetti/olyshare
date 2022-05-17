@@ -150,6 +150,7 @@ func (i *Image) Grab(ctx context.Context, camIP string, cli *http.Client) (body 
 	if err != nil {
 		return
 	}
+	fmt.Printf("dowloading image %s\n", imgURL)
 	resp, err := cli.Do(req)
 	if err != nil {
 		return
@@ -171,7 +172,7 @@ func (i *Image) Grab(ctx context.Context, camIP string, cli *http.Client) (body 
 	}
 
 	taken, err = xif.DateTime()
-	fmt.Printf("dowloading image %s taken on %s\n", imgURL, taken.Format(time.RubyDate))
+	fmt.Printf("dowloaded image %s taken on %s\n", imgURL, taken.Format(time.RubyDate))
 
 	return body, taken, err
 }
