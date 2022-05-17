@@ -94,6 +94,7 @@ func main() {
 		CopyDays:         copyDays,
 		WriteDir:         outDir,
 		ImportRoutines:   importRoutines,
+		SaveHandler:      camera.FileSaver,
 	}
 	err := imp.Import(appCtx, cam, httpcache.NewTransport(diskcache.New(cacheDir)).Client())
 	if err != nil {

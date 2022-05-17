@@ -27,12 +27,15 @@ type Camera struct {
 	ImagesURL string
 }
 
-func (c *Camera) ListImages(ctx context.Context, cli *http.Client, skipFilters []func(*Image) bool) ([]*Image, error) {
+type SkipFilter[T any] func(*T) bool
+
+func (c *Camera) ListImages(ctx context.Context, cli *http.Client, skipFilters []SkipFilter[Image]) ([]*Image, error) {
 	var images []*Image
 	defer func() {
 		if ctx.Err() != nil {
 			images = nil
 		} else {
+			// reverse the images as the latest ones are at the end
 			for i, j := 0, len(images)-1; i < j; i, j = i+1, j-1 {
 				images[i], images[j] = images[j], images[i]
 			}
@@ -57,35 +60,66 @@ func (c *Camera) ListImages(ctx context.Context, cli *http.Client, skipFilters [
 		return images, err
 	}
 
-	scanner := bufio.NewScanner(bytes.NewReader(buf))
-
-	for scanner.Scan() && ctx.Err() == nil {
-		txt := scanner.Text()
-		if strings.HasPrefix(txt, "/") {
-			parts := strings.Split(txt, ",")
-			fn := strings.Join(parts[:2], "/")
-			img := &Image{
-				ID: fn,
-			}
-			skip := false
-			for _, f := range skipFilters {
-				if f(img) {
-					skip = true
-					break
-				}
-			}
-			if !skip {
-				images = append(images, img)
-			}
-		}
-	}
-	if !scanner.Scan() {
-		if err = scanner.Err(); err != nil {
-			return images, err
-		}
+	lines, err := ScanLines(bytes.NewReader(buf))
+	if err != nil {
+		return images, err
 	}
 
+	imageLinks := Filter(lines, []func(string) bool{
+		func(a string) bool {
+			return strings.HasPrefix(a, "/")
+		},
+	})
+	images = MakeImages(imageLinks, skipFilters)
 	return images, nil
+}
+
+func MakeImages(a []string, skipFilters []SkipFilter[Image]) []*Image {
+	var images []*Image
+	for _, txt := range a {
+		parts := strings.Split(txt, ",")
+		fn := strings.Join(parts[:2], "/")
+		img := &Image{
+			ID: fn,
+		}
+		skipped := false
+		for _, f := range skipFilters {
+			if f(img) {
+				skipped = true
+				break
+			}
+		}
+		if !skipped {
+			images = append(images, img)
+		}
+	}
+	return images
+}
+
+func Filter[T any](a []T, filters []func(a T) bool) []T {
+	var results []T
+	for _, l := range a {
+		skipped := false
+		for _, f := range filters {
+			if f(l) {
+				skipped = true
+				break
+			}
+		}
+		if !skipped {
+			results = append(results, l)
+		}
+	}
+	return results
+}
+
+func ScanLines(r io.Reader) ([]string, error) {
+	var links []string
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		links = append(links, strings.TrimSpace(scanner.Text()))
+	}
+	return links, scanner.Err()
 }
 
 type Image struct {
@@ -152,10 +186,11 @@ type Importer struct {
 	CopyDays         int
 	WriteDir         string
 	ImportRoutines   int
+	SaveHandler      FileWriter
 }
 
 func (i *Importer) Import(ctx context.Context, cam *Camera, cli *http.Client) (err error) {
-	images, err := cam.ListImages(ctx, cli, []func(img *Image) bool{
+	images, err := cam.ListImages(ctx, cli, []SkipFilter[Image]{
 		func(img *Image) bool {
 			p := filepath.Join(i.WriteDir, img.Id())
 			if _, err := os.Stat(p); err == nil {
@@ -233,23 +268,35 @@ func (i *Importer) StoreImage(ctx context.Context, cli *http.Client, img *Image,
 	}
 
 	p := filepath.Join(i.WriteDir, img.Id())
-	f, err := os.Create(p)
+
+	err = i.SaveHandler(body, p)
 	if err != nil {
-		return fmt.Errorf("file create %s failed with %v", img.ID, err)
+		return err
+	}
+	fmt.Printf("imported file to %s\n", p)
+	return nil
+}
+
+type FileWriter func(data []byte, path string) error
+
+var FileSaver = func(data []byte, path string) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("file create %s failed with %v", path, err)
 	}
 	defer func() {
 		err := f.Close()
 		if err != nil {
-			fmt.Printf("file close %s failed with %v", img.ID, err)
+			fmt.Printf("file close %s failed with %v", path, err)
 		}
 	}()
-	_, err = io.Copy(f, bytes.NewReader(body))
+	_, err = io.Copy(f, bytes.NewReader(data))
 	if err == nil {
 		err := f.Sync()
 		if err != nil {
-			return fmt.Errorf("file create %s failed with %v", img.ID, err)
+			return fmt.Errorf("file create %s failed with %v", path, err)
 		}
 	}
-	fmt.Printf("imported file to %s\n", p)
+
 	return nil
 }
