@@ -45,7 +45,7 @@ var source []byte
 // /DCIM/100OLYMP/P8301116.JPG
 // /DCIM/100OLYMP,P3300029.JPG,2964502,0,19582,35122
 func main() {
-	if len(os.Args) >= 1 && os.Args[1] == "src" {
+	if len(os.Args) == 2 && os.Args[1] == "src" {
 		s, err := os.Create("src.zip")
 		if err != nil {
 			panic(err)
@@ -89,14 +89,24 @@ func main() {
 		ImagesURL: camIP + "/get_imglist.cgi?DIR=/DCIM/100OLYMP", // "http://192.168.0.10/get_imglist.cgi?DIR=%s"
 	}
 
+	cli := httpcache.NewTransport(diskcache.New(cacheDir)).Client()
 	imp := &camera.Importer{
 		SkipContentTypes: skipCtSet,
 		CopyDays:         copyDays,
 		WriteDir:         outDir,
 		ImportRoutines:   importRoutines,
 		SaveHandler:      camera.FileSaver,
+		ImporterSource: func() ([]byte, error) {
+			buf, err := camera.CameraLinksImporter(appCtx, cli, cam.ImagesURL)
+			println(string(buf))
+			return buf, err
+		},
+		// ImporterSource: func() ([]byte, error) {
+		// 	buf, err := camera.FileLinksImporter(filepath.Join("camera", "urls.txt"))
+		// 	return buf, err
+		// },
 	}
-	err := imp.Import(appCtx, cam, httpcache.NewTransport(diskcache.New(cacheDir)).Client())
+	err := imp.Import(appCtx, cam, cli)
 	if err != nil {
 		fmt.Printf("import error: %v\n", err)
 	}

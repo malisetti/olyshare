@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -15,7 +16,6 @@ import (
 
 	"github.com/rwcarlsen/goexif/exif"
 	"github.com/rwcarlsen/goexif/mknote"
-	"github.com/uniplaces/carbon"
 )
 
 func init() {
@@ -29,7 +29,7 @@ type Camera struct {
 
 type SkipFilter[T any] func(*T) bool
 
-func (c *Camera) ListImages(ctx context.Context, cli *http.Client, skipFilters []SkipFilter[Image]) ([]*Image, error) {
+func (c *Camera) ListImages(ctx context.Context, skipFilters []SkipFilter[Image], ImporterFunc ImporterSource) ([]*Image, error) {
 	var images []*Image
 	defer func() {
 		if ctx.Err() != nil {
@@ -41,21 +41,8 @@ func (c *Camera) ListImages(ctx context.Context, cli *http.Client, skipFilters [
 			}
 		}
 	}()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.ImagesURL, nil)
-	if err != nil {
-		return images, err
-	}
-	resp, err := cli.Do(req)
-	if err != nil {
-		return images, err
-	}
-	defer func() {
-		err := resp.Body.Close()
-		if err != nil {
-			fmt.Printf("resp body close %s failed with %v", c.ImagesURL, err)
-		}
-	}()
-	buf, err := io.ReadAll(resp.Body)
+
+	buf, err := ImporterFunc()
 	if err != nil {
 		return images, err
 	}
@@ -67,7 +54,7 @@ func (c *Camera) ListImages(ctx context.Context, cli *http.Client, skipFilters [
 
 	imageLinks := Filter(lines, []func(string) bool{
 		func(a string) bool {
-			return strings.HasPrefix(a, "/")
+			return !strings.HasPrefix(a, "/")
 		},
 	})
 	images = MakeImages(imageLinks, skipFilters)
@@ -78,6 +65,10 @@ func MakeImages(a []string, skipFilters []SkipFilter[Image]) []*Image {
 	var images []*Image
 	for _, txt := range a {
 		parts := strings.Split(txt, ",")
+		if len(parts) < 2 {
+			continue
+		}
+		// TODO: check len cond on parts
 		fn := strings.Join(parts[:2], "/")
 		img := &Image{
 			ID: fn,
@@ -128,6 +119,10 @@ type Image struct {
 	Type  string
 }
 
+func (i *Image) String() string {
+	return fmt.Sprintf("id: %s, taken: %s, type: %s", i.ID, i.Taken, i.Type)
+}
+
 func (i *Image) Id() string {
 	fn := strings.Split(i.ID, "/")
 
@@ -176,12 +171,13 @@ func (i *Image) Grab(ctx context.Context, camIP string, cli *http.Client) (body 
 	}
 
 	taken, err = xif.DateTime()
-	fmt.Printf("dowloading image %s taken on %s\n", imgURL, carbon.NewCarbon(taken).FormattedDateString())
+	fmt.Printf("dowloading image %s taken on %s\n", imgURL, taken.Format(time.RubyDate))
 
 	return body, taken, err
 }
 
 type Importer struct {
+	ImporterSource   ImporterSource
 	SkipContentTypes map[string]struct{}
 	CopyDays         int
 	WriteDir         string
@@ -190,7 +186,7 @@ type Importer struct {
 }
 
 func (i *Importer) Import(ctx context.Context, cam *Camera, cli *http.Client) (err error) {
-	images, err := cam.ListImages(ctx, cli, []SkipFilter[Image]{
+	images, err := cam.ListImages(ctx, []SkipFilter[Image]{
 		func(img *Image) bool {
 			p := filepath.Join(i.WriteDir, img.Id())
 			if _, err := os.Stat(p); err == nil {
@@ -208,7 +204,7 @@ func (i *Importer) Import(ctx context.Context, cam *Camera, cli *http.Client) (e
 			}
 			return false
 		},
-	})
+	}, i.ImporterSource)
 	if err != nil || len(images) == 0 {
 		return
 	}
@@ -261,10 +257,11 @@ func (i *Importer) StoreImage(ctx context.Context, cli *http.Client, img *Image,
 		return err
 	}
 	img.Taken = taken
-	cx := carbon.Now().SubDays(i.CopyDays)
-	cxt := carbon.NewCarbon(taken)
-	if cxt.DiffInDays(cx, true) <= int64(i.CopyDays) {
-		return fmt.Errorf("remaining images are older than %s so stopping here", cxt.FormattedDateString())
+	if i.CopyDays > 0 {
+		dur := time.Since(taken)
+		if int(math.Ceil(dur.Hours()/24)) > i.CopyDays {
+			return fmt.Errorf("remaining images are older than %s so stopping here %d", taken, i.CopyDays)
+		}
 	}
 
 	p := filepath.Join(i.WriteDir, img.Id())
@@ -278,6 +275,39 @@ func (i *Importer) StoreImage(ctx context.Context, cli *http.Client, img *Image,
 }
 
 type FileWriter func(data []byte, path string) error
+
+type ImporterSource func() ([]byte, error)
+
+func CameraLinksImporter(ctx context.Context, cli *http.Client, ip string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ip, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := cli.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		err := resp.Body.Close()
+		if err != nil {
+			fmt.Printf("resp body close %s failed with %v", ip, err)
+		}
+	}()
+	buf, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	return buf, err
+}
+
+func FileLinksImporter(path string) ([]byte, error) {
+	return os.ReadFile(path)
+}
+
+var TestURLsImporter = func(path string) ([]byte, error) {
+	return FileLinksImporter(path)
+}
 
 var FileSaver = func(data []byte, path string) error {
 	f, err := os.Create(path)
