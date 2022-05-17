@@ -98,7 +98,6 @@ func main() {
 		SaveHandler:      camera.FileSaver,
 		ImporterSource: func() ([]byte, error) {
 			buf, err := camera.CameraLinksImporter(appCtx, cli, cam.ImagesURL)
-			println(string(buf))
 			return buf, err
 		},
 		// ImporterSource: func() ([]byte, error) {
