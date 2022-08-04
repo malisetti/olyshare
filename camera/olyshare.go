@@ -29,7 +29,7 @@ type Camera struct {
 
 type SkipFilter[T any] func(T) bool
 
-func (c *Camera) ListImages(ctx context.Context, skipFilters []SkipFilter[*Image], ImporterFunc ImporterSource) ([]*Image, error) {
+func (c *Camera) ListImages(ctx context.Context, skipFilters []SkipFilter[*Image], importerFunc ImporterSource) ([]*Image, error) {
 	var images []*Image
 	defer func() {
 		if ctx.Err() != nil {
@@ -42,7 +42,7 @@ func (c *Camera) ListImages(ctx context.Context, skipFilters []SkipFilter[*Image
 		}
 	}()
 
-	buf, err := ImporterFunc()
+	buf, err := importerFunc()
 	if err != nil {
 		return images, err
 	}

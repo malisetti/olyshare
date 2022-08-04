@@ -1,1 +1,0 @@
-copy required source files to src.zip
